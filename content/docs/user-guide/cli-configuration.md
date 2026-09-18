@@ -24,7 +24,11 @@ tls-ca-cert: ""
 tls-client-cert: ""
 tls-client-key: ""
 tls-skip-verify: false
+issuer-url: ""
 ```
+
+When the control plane requires authentication, set `issuer-url` or use
+`dcm login` (see [Authentication](../getting-started/authentication/)).
 
 ## Configuration Priority
 
@@ -45,6 +49,58 @@ The following flags are available on all commands:
 | `--output`            | `-o`  | `table`                 | Output format (`table`, `json`, `yaml`) |
 | `--timeout`           |       | `30`                    | Request timeout in seconds              |
 | `--config`            |       | `~/.dcm/config.yaml`    | Path to configuration file              |
+| `--issuer-url`        |       | _(empty)_               | OIDC issuer URL for authentication      |
+| `--token`             |       | _(empty)_               | Bearer token (skips interactive login)  |
+
+## Authentication
+
+When the control plane has authentication enabled, the CLI must send a JWT
+bearer token on each request. Use one of the following approaches:
+
+### Interactive login
+
+Run `dcm login` after setting the issuer URL. The command runs the OIDC device
+authorization flow in your browser and stores tokens locally.
+
+For the reference compose stack, map the hostname `keycloak` on your host before
+login (see
+[Local compose: host access to Keycloak](../getting-started/authentication/#local-compose-host-access-to-keycloak)).
+
+```bash
+dcm login --issuer-url http://keycloak:8080/realms/dcm \
+  --control-plane-url http://localhost:8080
+```
+
+On success, `issuer-url` is saved in the config file. Use `dcm logout` to revoke
+stored refresh tokens and clear credentials.
+
+### Static token
+
+For scripts and CI, pass a bearer access token without using the device flow:
+
+| Flag / variable | Description                                 |
+| --------------- | ------------------------------------------- |
+| `--token`       | Bearer access token for this invocation     |
+| `DCM_TOKEN`     | Same as `--token`, via environment variable |
+
+When `--token` or `DCM_TOKEN` is set, the CLI does not read the token store. If
+both a static token and `issuer-url` are configured, the static token is used
+for API requests (`--token` and `DCM_TOKEN` follow the usual flag-over-env
+precedence). Stored login sessions and `dcm logout` still use `issuer-url`.
+
+### Auth-related settings
+
+| Flag / variable  | Config key   | Description                                               |
+| ---------------- | ------------ | --------------------------------------------------------- |
+| `--issuer-url`   | `issuer-url` | OIDC issuer URL (required for `dcm login` / `dcm logout`) |
+| `DCM_ISSUER_URL` | `issuer-url` | Environment override for issuer URL                       |
+
+If `issuer-url` is set (and no static token is configured), the CLI loads tokens
+from the OS keyring or `~/.dcm/tokens.json` and refreshes access tokens before
+they expire.
+
+Full workflows, control-plane settings, and troubleshooting are in
+[Authentication](../getting-started/authentication/).
 
 ## TLS Configuration
 
@@ -65,10 +121,10 @@ All commands support three output formats via the `-o` flag:
 - **`json`** — Structured JSON output, useful for scripting and automation.
 - **`yaml`** — YAML output.
 
-For example, to list providers as JSON:
+For example, to list catalog items as JSON:
 
 ```bash
-dcm sp provider list -o json
+dcm catalog item list -o json
 ```
 
 ## Shell Completion
